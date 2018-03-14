@@ -2,13 +2,11 @@
 
 function _asyncToGenerator(fn) { return function () { var gen = fn.apply(this, arguments); return new Promise(function (resolve, reject) { function step(key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { return Promise.resolve(value).then(function (value) { step("next", value); }, function (err) { step("throw", err); }); } } return step("next"); }); }; }
 
-var debug = require('debug')('HeadlessChrome:chrome');
+const debug = require('debug')('HeadlessChrome:chrome');
 
-var chromeLauncher = require('chrome-launcher');
-var CDP = require('chrome-remote-interface');
-
-var _require = require('./util'),
-    sleep = _require.sleep;
+const chromeLauncher = require('chrome-launcher');
+const CDP = require('chrome-remote-interface');
+const { sleep } = require('./util');
 
 /**
  * Launches a debugging instance of Chrome on port 9222.
@@ -28,115 +26,62 @@ var _require = require('./util'),
  *    @property {string} userDataDir - The userDataDir used by the Chrome instance
  *    @property {async fn} kill - Fn to kill the Chrome instance
  */
+module.exports.launch = (() => {
+  var _ref = _asyncToGenerator(function* (headless, options = {}) {
+    debug(`Launching Chrome instance. Headless: ${headless === true ? 'YES' : 'NO'}`);
 
+    const chromeOptions = {
+      port: options.port,
+      handleSIGINT: options.handleSIGINT,
+      userDataDir: options.userDataDir,
+      chromeFlags: options.flags
+    };
 
-module.exports.launch = function () {
-  var _ref = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee(headless) {
-    var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-    var chromeOptions, attempt, instance, launchAttempts;
-    return regeneratorRuntime.wrap(function _callee$(_context) {
-      while (1) {
-        switch (_context.prev = _context.next) {
-          case 0:
-            debug(`Launching Chrome instance. Headless: ${headless === true ? 'YES' : 'NO'}`);
+    if (headless) {
+      chromeOptions.chromeFlags.push('--headless');
+    }
+    if (options.disableGPU) {
+      chromeOptions.chromeFlags.push('--disable-gpu');
+    }
+    if (options.noSandbox) {
+      chromeOptions.chromeFlags.push('--no-sandbox');
+    }
 
-            chromeOptions = {
-              port: options.port,
-              handleSIGINT: options.handleSIGINT,
-              userDataDir: options.userDataDir,
-              chromeFlags: options.flags
-            };
+    let attempt = 0;
+    let instance;
 
+    const launchAttempts = options.launchAttempts;
 
-            if (headless) {
-              chromeOptions.chromeFlags.push('--headless');
-            }
-            if (options.disableGPU) {
-              chromeOptions.chromeFlags.push('--disable-gpu');
-            }
-            if (options.noSandbox) {
-              chromeOptions.chromeFlags.push('--no-sandbox');
-            }
-
-            attempt = 0;
-            instance = void 0;
-            launchAttempts = options.launchAttempts;
-
-          case 8:
-            if (!(!instance && attempt++ < launchAttempts)) {
-              _context.next = 29;
-              break;
-            }
-
-            debug(`Launching Chrome. Attempt ${attempt}/${launchAttempts}...`);
-            _context.prev = 10;
-            _context.next = 13;
-            return chromeLauncher.launch(chromeOptions);
-
-          case 13:
-            instance = _context.sent;
-            _context.next = 27;
-            break;
-
-          case 16:
-            _context.prev = 16;
-            _context.t0 = _context['catch'](10);
-
-            debug(`Can't launch Chrome in attempt ${attempt}/${launchAttempts}. Error code: ${_context.t0.code}`, _context.t0);
-
-            if (!(_context.t0.code === 'EAGAIN' || _context.t0.code === 'ECONNREFUSED')) {
-              _context.next = 26;
-              break;
-            }
-
-            _context.next = 22;
-            return sleep(1000 * attempt);
-
-          case 22:
-            if (!(attempt >= launchAttempts)) {
-              _context.next = 24;
-              break;
-            }
-
-            throw _context.t0;
-
-          case 24:
-            _context.next = 27;
-            break;
-
-          case 26:
-            throw _context.t0;
-
-          case 27:
-            _context.next = 8;
-            break;
-
-          case 29:
-            if (instance) {
-              _context.next = 31;
-              break;
-            }
-
-            throw new Error(`Can't launch Chrome! (attempts: ${attempt - 1}/${launchAttempts})`);
-
-          case 31:
-
-            debug(`Chrome instance launched in port "${instance.port}", pid "${instance.pid}"`);
-
-            return _context.abrupt('return', instance);
-
-          case 33:
-          case 'end':
-            return _context.stop();
+    while (!instance && attempt++ < launchAttempts) {
+      debug(`Launching Chrome. Attempt ${attempt}/${launchAttempts}...`);
+      try {
+        instance = yield chromeLauncher.launch(chromeOptions);
+      } catch (err) {
+        debug(`Can't launch Chrome in attempt ${attempt}/${launchAttempts}. Error code: ${err.code}`, err);
+        if (err.code === 'EAGAIN' || err.code === 'ECONNREFUSED') {
+          yield sleep(1000 * attempt);
+          if (attempt >= launchAttempts) {
+            throw err;
+          }
+        } else {
+          throw err;
         }
       }
-    }, _callee, this, [[10, 16]]);
-  }));
+    }
 
-  return function (_x2) {
+    if (!instance) {
+      throw new Error(`Can't launch Chrome! (attempts: ${attempt - 1}/${launchAttempts})`);
+    }
+
+    debug(`Chrome instance launched in port "${instance.port}", pid "${instance.pid}"`);
+
+    return instance;
+  });
+
+  return function (_x) {
     return _ref.apply(this, arguments);
   };
-}();
+})();
 
 /**
  * Attach the Chrome Debugging Protocol to a Chrome instance in given host:port combination
@@ -147,41 +92,24 @@ module.exports.launch = function () {
  * @param {boolean} remote - A boolean indicating whether the protocol must be fetched remotely or if the local version must be used
  * @return {object} - CDP Client object
  */
-module.exports.attachCdpToBrowser = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee2() {
-  var host = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'localhost';
-  var port = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 9222;
-  var remote = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
-  var client;
-  return regeneratorRuntime.wrap(function _callee2$(_context2) {
-    while (1) {
-      switch (_context2.prev = _context2.next) {
-        case 0:
-          debug(`Preparing Chrome Debugging Protocol (CDP) for host "${host}" and port "${port}"...`);
-          _context2.prev = 1;
-          _context2.next = 4;
-          return CDP({ host, port, remote });
+module.exports.attachCdpToBrowser = (() => {
+  var _ref2 = _asyncToGenerator(function* (host = 'localhost', port = 9222, remote = false) {
+    debug(`Preparing Chrome Debugging Protocol (CDP) for host "${host}" and port "${port}"...`);
+    try {
+      let client = yield CDP({ host, port, remote });
 
-        case 4:
-          client = _context2.sent;
-
-
-          debug('CDP prepared for browser');
-          return _context2.abrupt('return', client);
-
-        case 9:
-          _context2.prev = 9;
-          _context2.t0 = _context2['catch'](1);
-
-          debug(`Couldnt connect CDP to browser`);
-          throw _context2.t0;
-
-        case 13:
-        case 'end':
-          return _context2.stop();
-      }
+      debug('CDP prepared for browser');
+      return client;
+    } catch (err) {
+      debug(`Couldnt connect CDP to browser`);
+      throw err;
     }
-  }, _callee2, this, [[1, 9]]);
-}));
+  });
+
+  return function () {
+    return _ref2.apply(this, arguments);
+  };
+})();
 
 /**
  * Attach the Chrome Debugging Protocol to a target in given host:port + targetId combination
@@ -192,45 +120,26 @@ module.exports.attachCdpToBrowser = _asyncToGenerator( /*#__PURE__*/regeneratorR
  * @param {string} targetId - The targetId to be attached
  * @return {object} - CDP client object
  */
-module.exports.attachCdpToTarget = function () {
-  var _ref3 = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee3(host, port, targetId) {
-    var client;
-    return regeneratorRuntime.wrap(function _callee3$(_context3) {
-      while (1) {
-        switch (_context3.prev = _context3.next) {
-          case 0:
-            debug(`Preparing Chrome Debugging Protocol (CDP) for Tab "${targetId}"...`);
-            _context3.prev = 1;
-            _context3.next = 4;
-            return CDP({ target: targetId, host, port });
+module.exports.attachCdpToTarget = (() => {
+  var _ref3 = _asyncToGenerator(function* (host, port, targetId) {
+    debug(`Preparing Chrome Debugging Protocol (CDP) for Tab "${targetId}"...`);
+    try {
+      const client = yield CDP({ target: targetId, host, port });
+      /**
+       * Enable Domains "Network", "Page", "DOM" and "CSS" in the client
+       */
+      yield Promise.all([client.Network.enable(), client.Page.enable(), client.DOM.enable(), client.CSS.enable(), client.Security.enable()]);
 
-          case 4:
-            client = _context3.sent;
-            _context3.next = 7;
-            return Promise.all([client.Network.enable(), client.Page.enable(), client.DOM.enable(), client.CSS.enable(), client.Security.enable()]);
+      debug(`CDP prepared for tab "${targetId}"!`);
 
-          case 7:
+      return client;
+    } catch (err) {
+      debug(`Couldnt connect CDP to tab "${targetId}"`);
+      throw err;
+    }
+  });
 
-            debug(`CDP prepared for tab "${targetId}"!`);
-
-            return _context3.abrupt('return', client);
-
-          case 11:
-            _context3.prev = 11;
-            _context3.t0 = _context3['catch'](1);
-
-            debug(`Couldnt connect CDP to tab "${targetId}"`);
-            throw _context3.t0;
-
-          case 15:
-          case 'end':
-            return _context3.stop();
-        }
-      }
-    }, _callee3, this, [[1, 11]]);
-  }));
-
-  return function (_x6, _x7, _x8) {
+  return function (_x2, _x3, _x4) {
     return _ref3.apply(this, arguments);
   };
-}();
+})();

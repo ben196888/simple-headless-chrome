@@ -1,6 +1,6 @@
 'use strict';
 
-var cssesc = require('cssesc');
+const cssesc = require('cssesc');
 
 /**
  * Checks if the browser is initialized. Exits the process if it's not
@@ -26,10 +26,8 @@ exports.fixSelector = function fixSelector(selector) {
  * @param {number} delay - Delay in miliseconds
  * @return {promise} - The promise that will solve after the delay
  */
-var sleep = exports.sleep = function (delay) {
-  return new Promise(function (resolve) {
-    return setTimeout(resolve, delay);
-  });
+const sleep = exports.sleep = function (delay) {
+  return new Promise(resolve => setTimeout(resolve, delay));
 };
 
 /**
@@ -41,16 +39,16 @@ exports.promiseTimeout = function (promise, timeout) {
   // https://stackoverflow.com/questions/30936824/what-is-the-best-general-practice-to-timeout-a-function-in-promise
   // Handles the timeout internally, clearing it when the promise resolves.
   // It prevents the library to hang until the timeout is resolved
-  var timer = null;
+  let timer = null;
 
-  return Promise.race([new Promise(function (resolve, reject) {
-    timer = setTimeout(function () {
-      var err = new Error('[Headless Chrome] Timeout after ' + timeout + ' ms');
+  return Promise.race([new Promise((resolve, reject) => {
+    timer = setTimeout(() => {
+      const err = new Error('[Headless Chrome] Timeout after ' + timeout + ' ms');
       err.code = 'TIMEOUT';
-      throw err;
+      reject(err);
     }, timeout);
     return timer;
-  }), promise.then(function (value) {
+  }), promise.then(value => {
     clearTimeout(timer);
     return value;
   })]);
@@ -62,10 +60,10 @@ exports.promiseTimeout = function (promise, timeout) {
  * @return {object} - The key value object
  */
 exports.interleaveArrayToObject = function (interleaveArray) {
-  var attributes = {};
-  for (var i = 0; i < interleaveArray.length; i++) {
-    var key = interleaveArray[i];
-    var value = interleaveArray[++i];
+  let attributes = {};
+  for (let i = 0; i < interleaveArray.length; i++) {
+    let key = interleaveArray[i];
+    let value = interleaveArray[++i];
     attributes[key] = value;
   }
   return attributes;
