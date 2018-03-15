@@ -260,10 +260,25 @@ exports.goTo = (() => {
       this.client.Security.setOverrideCertificateErrors({ override: true });
     }
 
-    yield this.client.Page.navigate({ url });
+    let err = null;
+    for (let i = 0; i < 3; i++) {
+      try {
 
-    if (options.timeout && typeof options.timeout) {
-      yield this.waitForPageToLoad(options.timeout);
+        yield this.client.Page.navigate({ url });
+
+        if (options.timeout && typeof options.timeout) {
+          yield this.waitForPageToLoad(options.timeout);
+        }
+
+        err = null;
+        break;
+      } catch (error) {
+        err = error;
+        err.message = `${error.message} after retried`;
+      }
+    }
+    if (err) {
+      throw err;
     }
     debug(`:: goTo => URL "${url}" navigated!`);
   });
