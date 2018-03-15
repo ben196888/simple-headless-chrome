@@ -260,26 +260,26 @@ exports.goTo = (() => {
       this.client.Security.setOverrideCertificateErrors({ override: true });
     }
 
-    let err = null;
-    for (let i = 0; i < 3; i++) {
-      try {
+    yield this.client.Page.navigate({ url });
 
-        yield this.client.Page.navigate({ url });
-
-        if (options.timeout && typeof options.timeout) {
-          yield this.waitForPageToLoad(options.timeout);
+    if (options.timeout && typeof options.timeout) {
+      let err = null;
+      for (let i = 0; i < 3; i++) {
+        const timeoutWithRetry = options.timeout << i;
+        try {
+          yield this.waitForPageToLoad(timeoutWithRetry);
+          err = null;
+          break;
+        } catch (error) {
+          err = error;
+          err.message = `${error.message} after retried ${i} times`;
         }
-
-        err = null;
-        break;
-      } catch (error) {
-        err = error;
-        err.message = `${error.message} after retried`;
+      }
+      if (err) {
+        throw err;
       }
     }
-    if (err) {
-      throw err;
-    }
+
     debug(`:: goTo => URL "${url}" navigated!`);
   });
 
